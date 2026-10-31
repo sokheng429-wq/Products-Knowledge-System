@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,existsSync} from 'node:fs';
+import {barcodeMatches,filterProducts,expiryStatus} from '../src/catalog.js';
+const {products}=JSON.parse(readFileSync(new URL('../public/catalog.json',import.meta.url)));
+test('catalog has all 797 source rows and 791 real images',()=>{assert.equal(products.length,797);assert.equal(products.filter(p=>p.images.length).length,791);assert.equal(new Set(products.map(p=>p.id)).size,797);for(const p of products){assert.equal(typeof p.barcode,'string');for(const img of p.images)assert.ok(existsSync(new URL('../public'+img,import.meta.url)));}});
+test('lookup preserves leading zeroes and resolves UPC / EAN equivalents',()=>{assert.equal(barcodeMatches(products,'4901777420076')[0].name,'Suntory Starbucks Coffee Black (Can) 185g');const sample=[{barcode:'0123456789012'}];assert.equal(barcodeMatches(sample,'123456789012').length,1);assert.equal(barcodeMatches(sample,'0123 4567 89012').length,1);assert.equal(barcodeMatches(sample,'').length,0);assert.equal(barcodeMatches(products,'00000000000000000000').length,0);});
+test('duplicates remain selectable rather than silently selecting one',()=>assert.equal(barcodeMatches([{barcode:'001'},{barcode:'001'}],'001').length,2));
+test('search combines department, category, and multilingual content',()=>{assert.ok(filterProducts(products,'starbucks','BEVERAGE','Coffee').length>0);assert.equal(filterProducts(products,'starbucks','BABY','Coffee').length,0);assert.ok(filterProducts(products,'កាហ្វេ','All products','').length>0);});
+test('expiry uses Bangkok date and includes the final day',()=>{const now=new Date('2026-10-31T00:00:00+07:00');assert.equal(expiryStatus('2026-10-30',now),'Expired');assert.equal(expiryStatus('2026-10-31',now),'Expires soon');assert.equal(expiryStatus('2026-12-15',now),'Expires soon');assert.equal(expiryStatus('2026-12-16',now),null);assert.equal(expiryStatus('',now),null);});
